@@ -410,7 +410,18 @@ void EIO_Write(uv_work_t* req) {
 
     // Start write operation - synchronous or asynchronous
     DWORD bytesWritten = 0;
-    if (!WriteFile((HANDLE)data->fd, data->bufferData, static_cast<DWORD>(data->bufferLength), &bytesWritten, &ov)) {
+    DWORD bytesWrite = data->bufferLength - data->offset;
+
+    // Workaround for some buggy board.
+    switch (bytesWrite) {
+    case 64:
+    case 128:
+    case 192:
+    case 256:
+      bytesWrite--;
+      break;
+    }
+    if (!WriteFile((HANDLE)data->fd, data->bufferData + data->offset, bytesWrite, &bytesWritten, &ov)) {
       DWORD lastError = GetLastError();
       if (lastError != ERROR_IO_PENDING) {
         // Write operation error
@@ -433,8 +444,8 @@ void EIO_Write(uv_work_t* req) {
       }
     }
     // Write operation completed synchronously
-    data->result = bytesWritten;
-    data->offset += data->result;
+    data->result += bytesWritten;
+    data->offset += bytesWritten;
     CloseHandle(ov.hEvent);
   } while (data->bufferLength > data->offset);
 }
